@@ -1,0 +1,24 @@
+*.py[co]
+*.swp
+*~
+.DS_Store
+\#*
+
+# packages
+*.egg
+*.egg-info
+bin
+eggs
+develop-eggs
+downloads
+parts
+lib
+.installed.cfg
+
+# sample application
+sample/
+
+# for tests
+bootstrap.py
+buildout.cfg
+patch.sh
