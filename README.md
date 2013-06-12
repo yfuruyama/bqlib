@@ -60,8 +60,8 @@ Note
 -----
 - Concurrent Requests to BigQUery
     - Concurrent requests to BigQuery is restricted to 20 requests by [Quota Policy](https://developers.google.com/bigquery/docs/quota-policy).
-    - This library controls concurrent requests using **BQJobTokenBucket** model and default max conccurent requests is 20.
-        - You can change \_MAX\_CONCURRENT\_REQUESTS variable.
+    - This library controls concurrent requests using **BQJobTokenBucket** model and default max conccurent requests is 5.
+        - You can change \_MAX\_CONCURRENT\_REQUESTS variable up to 20.
     - If you want to set up concurrent requests to 20, you also have to set up at traffic controls in [api-console](https://code.google.com/apis/console/) page
 
 License

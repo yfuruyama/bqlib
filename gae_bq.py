@@ -19,7 +19,7 @@ _API = 'bigquery'
 _API_VERSION = 'v2'
 _DISCOVERY_URI = ('https://www.googleapis.com/discovery/v1/apis/'
                   '{api}/{apiVersion}/rest')
-_MAX_CONCURRENT_REQUESTS = 20
+_MAX_CONCURRENT_REQUESTS = 5
 
 
 class BQError(Exception):
