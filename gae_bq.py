@@ -76,7 +76,7 @@ class BQJob(object):
 
         for key, value in kwargs.items():
             setattr(self, key, value)
-        for required_flag in ('project_id', 'credentials', 'query'):
+        for required_flag in ('http', 'project_id', 'query'):
             if not kwargs.has_key(required_flag):
                 raise ValueError('Missing required flag: %s' % (required_flag,))
         default_flags = {
@@ -95,13 +95,20 @@ class BQJob(object):
             raise BQError(message='timeout', error=[])
 
     def run_async(self, **kwargs):
+        discovery_document = BQHelper.retrieve_discovery_document()
         bq_client = BigqueryClient(
                 api=_API,
                 api_version=_API_VERSION,
                 project_id=self.project_id,
-                discovery_document=BQHelper.retrieve_discovery_document(),
-                credentials=self.credentials
+                discovery_document=discovery_document,
                 )
+
+        # BigqueryClient requires 'credentials' to build apiclient instance.
+        # But using 'authorized http' is more versatile than using 'credentials'.
+        bq_client._apiclient = BQHelper.build_apiclient(
+            discovery_document,
+            self.http)
+
         BQJobTokenBucket.pull_token()
         try:
             job = run_func_with_backoff(bq_client.Query, query=self.query, sync=False)
@@ -210,6 +217,19 @@ class BQHelper(object):
         memcache.set(document_key, body, time=86400) # 86400 = 1 day
 
         return body
+
+    @staticmethod
+    def build_apiclient(discovery_document, http):
+        from apiclient import discovery
+        from bigquery_client import BigqueryModel, BigqueryHttp
+
+        bigquery_model = BigqueryModel()
+        bigquery_http = BigqueryHttp.Factory(bigquery_model)
+        return discovery.build_from_document(
+            discovery_document, http=http,
+            model=bigquery_model,
+            requestBuilder=bigquery_http)
+
 
     @staticmethod
     def convert_type(field_type, value):
