@@ -15,11 +15,11 @@ from gae_bq import BQJob
 
 project_id = 'example_project'
 query = 'SELECT foo FROM bar'
-credentials = OAUTH2_CREDENTIALS
+http = authorized_http
 
 bqjob = BQJob(project_id=project_id, 
               query=query, 
-              credentials=credentials)
+              http=http)
 
 # run synchronously
 job_result = bqjob.run_sync()
@@ -41,10 +41,10 @@ from gae_bq import BQJob, BQJobGroup
 
 bqjob1 = BQJob(project_id=project_id, 
                query=query, 
-               credentials=credentials)
+               http=http)
 bqjob2 = BQJob(project_id=project_id, 
                query=query, 
-               credentials=credentials)
+               http=http)
 
 job_group = BQJobGroup([bqjob1, bqjob2])
 # synchronously
