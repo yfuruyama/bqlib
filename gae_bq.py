@@ -12,7 +12,7 @@ import sys
 from google.appengine.ext import ndb
 from google.appengine.api import memcache
 
-from bigquery_client import BigqueryError, BigqueryNotFoundError, BigqueryClient, ConfigurePythonLogger
+from bigquery_client import BigqueryError, BigqueryNotFoundError, BigqueryClient
 
 
 _API = 'bigquery'
@@ -80,12 +80,29 @@ class BQJob(object):
             if not kwargs.has_key(required_flag):
                 raise ValueError('Missing required flag: %s' % (required_flag,))
         default_flags = {
-            'bq_client': None,
             'job_reference': None,
         }
         for key, value in default_flags.iteritems():
             if not hasattr(self, key):
                 setattr(self, key, value)
+
+        if not hasattr(self, 'bq_client'):
+            discovery_document = BQHelper.retrieve_discovery_document()
+            bq_client = BigqueryClient(
+                    api=_API,
+                    api_version=_API_VERSION,
+                    project_id=self.project_id,
+                    discovery_document=discovery_document,
+                    wait_printer_factory=BigqueryClient.QuietWaitPrinter
+                    )
+
+            # BigqueryClient requires 'credentials' to build 
+            # apiclient instance. But using 'authorized http' 
+            # is more versatile than using 'credentials'.
+            bq_client._apiclient = BQHelper.build_apiclient(
+                discovery_document,
+                self.http)
+            self.bq_client = bq_client
 
     def run_sync(self, timeout=sys.maxint):
         self.run_async()
@@ -95,23 +112,9 @@ class BQJob(object):
             raise BQError(message='timeout', error=[])
 
     def run_async(self, **kwargs):
-        discovery_document = BQHelper.retrieve_discovery_document()
-        bq_client = BigqueryClient(
-                api=_API,
-                api_version=_API_VERSION,
-                project_id=self.project_id,
-                discovery_document=discovery_document,
-                )
-
-        # BigqueryClient requires 'credentials' to build apiclient instance.
-        # But using 'authorized http' is more versatile than using 'credentials'.
-        bq_client._apiclient = BQHelper.build_apiclient(
-            discovery_document,
-            self.http)
-
         BQJobTokenBucket.pull_token()
         try:
-            job = run_func_with_backoff(bq_client.Query, query=self.query, sync=False)
+            job = run_func_with_backoff(self.bq_client.Query, query=self.query, sync=False)
         except BigqueryError as err:
             message = None
             error = None
@@ -121,7 +124,6 @@ class BQJob(object):
                 error = err.error
             raise BQError(message=message, error=error)
         self.job_reference = BigqueryClient.ConstructObjectReference(job)
-        self.bq_client = bq_client
 
     def get_result(self):
         """ get response from BigQuery
