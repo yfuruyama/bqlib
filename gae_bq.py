@@ -197,7 +197,7 @@ class BQHelper(object):
         u""" Retrieve discovery document for BigQuery
         
         At first, discovery document is to be fetched from memcache.
-        If discovery document is not included in memcache,
+        If discovery document doesn't exist in memcache,
         publish HTTP request to get a document discovery and set it to memcache
         """
         document_key = 'discovery_document'
