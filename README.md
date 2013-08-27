@@ -1,4 +1,4 @@
-bq - BigQuery python library
+bqlib - BigQuery python library
 ------------------------------------------------
 A BigQuery python library.  
 This library is a wrapper for bigquery_client.py provided by Google.
@@ -11,7 +11,7 @@ BQJob is a class to start the BigQuery job and fetch result.
 You can use either run\_sync(synchronous) or run\_async(asynchronous) method.
 
 ```python
-from bq import BQJob
+from bqlib import BQJob
 
 project_id = 'example_project'
 query = 'SELECT foo FROM bar'
@@ -37,7 +37,7 @@ BQJobGroup is a class for putting multiple BQJobs into an one group.
 Every BQJob in that group are executed concurrently.
 
 ```python
-from bq import BQJob, BQJobGroup
+from bqlib import BQJob, BQJobGroup
 
 bqjob1 = BQJob(project_id=project_id, 
                query=query, 

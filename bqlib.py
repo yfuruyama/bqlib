@@ -2,7 +2,7 @@
 # Copyright 2013, Yuuki Furuyama
 # Released under the MIT License.
 
-""" bq - BigQuery python library """
+""" bqlib - BigQuery python library """
 
 import logging
 import urllib2

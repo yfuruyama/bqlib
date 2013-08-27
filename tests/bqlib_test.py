@@ -2,7 +2,7 @@
 # Copyright 2013, Yuuki Furuyama
 # Released under the MIT License.
 
-"""bq tests"""
+"""bqlib tests"""
 
 import os
 import sys
@@ -45,6 +45,7 @@ _fixtures_query_results = [
 
 
 class BigqueryClientMock(object):
+    """Mock for BigqueryClient class"""
     def __init__(self):
         self.wait_printer_factory = Mock()
     def setup_schema_and_rows(self, schema, rows):
@@ -96,6 +97,7 @@ def pytest_funcarg__bq_jobgroup(request):
 
 
 class TestBQJob(object):
+    """test for BQJob class"""
     def setup_method(self, method):
         pass
 
@@ -155,6 +157,7 @@ class TestBQJobGroup(object):
 
 
 class TestBQHelper(object):
+    """test for BQHelper class"""
 
     def setup_method(self, method):
         pass
