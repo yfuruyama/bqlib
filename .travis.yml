@@ -2,8 +2,8 @@ language: python
 python:
   - "2.7"
 before_install:
-  - wget http://svn.zope.org/*checkout*/zc.buildout/trunk/bootstrap/bootstrap.py
-  - python bootstrap.py -v 1.7.1
+  - wget http://downloads.buildout.org/1/bootstrap.py
+  - python bootstrap.py -v 1.7.0 -d
   - bin/buildout
 script:
   - bin/py.test -v tests/bqlib_test.py
