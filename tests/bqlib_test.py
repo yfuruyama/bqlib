@@ -11,7 +11,7 @@ from contextlib import nested
 
 import pytest
 from mock import patch, Mock
-from bq import BQJob, BQJobGroup, BQHelper
+from bqlib import BQJob, BQJobGroup, BQHelper
 
 ### fixtures
 _fixtures_convert_type = [
@@ -174,7 +174,7 @@ class TestBQHelper(object):
     @pytest.mark.parametrize(('field_type', 'value', 'expected'),
             _fixtures_convert_type)
     def test_convert_type(self, field_type, value, expected):
-        with patch('gae_bq.is_str_or_unicode', return_value=True):
+        with patch('bqlib.is_str_or_unicode', return_value=True):
             if isclass(expected) and issubclass(expected, Exception):
                 with pytest.raises(expected):
                     BQHelper.convert_type(field_type, value)
@@ -196,7 +196,7 @@ class TestBQHelper(object):
 
         with nested(
                 patch('urllib2.urlopen', return_value=_DiscoveryHTTPResponse()),
-                patch('gae_bq.BQHelper.is_gae_runtime', return_value=False)
+                patch('bqlib.BQHelper.is_gae_runtime', return_value=False)
                 ):
             storage = _DiscoveryDocumentStorage()
             # retrieve from HTTP request without storage
