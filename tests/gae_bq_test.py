@@ -6,25 +6,14 @@
 
 import os
 import sys
-import datetime
 from inspect import isclass
-import urllib2
-from StringIO import StringIO
 from contextlib import nested
 
 import pytest
 from mock import patch, Mock
+from gae_bq import BQJob, BQJobGroup, BQHelper
 
-# sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
-
-from dev_appserver import fix_sys_path
-fix_sys_path()
-
-from google.appengine.api import memcache
-from google.appengine.ext import testbed
-from bigquery_client import BigqueryClient
-from gae_bq import BQHelper
-
+### fixtures
 _fixtures_convert_type = [
     ('STRING', 'hello', 'hello'),
     ('INTEGER', '1234', 1234),
@@ -35,31 +24,152 @@ _fixtures_convert_type = [
     ('FOO', 'test', ValueError),
 ]
 
-# _fixtures_bigquery_schema = [
-	# [{u'type': u'STRING', u'name': u'date', u'mode': u'NULLABLE'}, 
-	# {u'type': u'FLOAT', u'name': u'charge', u'mode': u'NULLABLE'}],
-# ]
-# _fixtures_bigquery_data = [
-	# ([{u'type': u'STRING', u'name': u'date', u'mode': u'NULLABLE'}, {u'type': u'FLOAT', u'name': u'charge', u'mode': u'NULLABLE'}],
-	# [[u'2012-06-21', u'1.0'], [u'2012-06-23', u'2.0'], [u'2012-09-01', u'1000.0']],
-	# {'date': })
-# ]
+_fixtures_is_gae_run_time = [
+    ('Google App Engine/2.7.1', True),
+    ('Development/2.7', True),
+    ('Heroku/2.7', False),
+    (None, False),
+]
+
+_fixtures_build_fully_qualified_table_name = [
+    ('4213455', 'bar', 'foo', '[4213455:bar.foo]'),
+]
+
+_fixtures_query_results = [
+    ([{u'type': u'STRING', u'name': u'date', u'mode': u'NULLABLE'},
+      {u'type': u'FLOAT', u'name': u'charge', u'mode': u'NULLABLE'}],
+     [[u'2012-06-21', u'1.0'], [u'2012-06-23', u'2.0'], [u'2012-09-01', u'1000.0']],
+     [{u'date': u'2012-06-21', u'charge': 1.0}, {u'date': u'2012-06-23', u'charge': 2.0}, {u'date': u'2012-09-01', u'charge': 1000.0},],
+     ),
+]
+
+
+class BigqueryClientMock(object):
+    def __init__(self):
+        self.wait_printer_factory = Mock()
+    def setup_schema_and_rows(self, schema, rows):
+        self._schema = schema
+        self._rows = rows
+    def Query(self, query, **kwargs):
+        job = Mock()
+        return job
+    def ConstructObjectReference(self, job):
+        return Mock()
+    def WaitJob(self, job_reference, status='DONE',
+              wait=sys.maxint, wait_printer_factory=None):
+        job_fixture = {
+          "kind": "bigquery#job",
+          "configuration": {
+            "query": {
+              "destinationTable": {
+              },
+            },
+          },
+        }
+        job = job_fixture
+        return job
+    def ReadSchemaAndRows(self, table_dict, max_rows):
+        schema = self._schema
+        rows = self._rows
+        return (schema, rows)
+
+
+class BQJobFactory():
+    def make_bqjob(self, http=Mock(), project_id=Mock(),
+            bq_client=BigqueryClientMock(), query=Mock()):
+        return BQJob(http=http, project_id=project_id,
+                bq_client=bq_client, query=query, verbose=False)
+
+
+class BQJobGroupFactory():
+    def make_bq_jobgroup(self, jobs=[]):
+        return BQJobGroup(jobs=jobs)
+
+
+def pytest_funcarg__bqjob(request):
+    return BQJobFactory().make_bqjob()
+
+
+def pytest_funcarg__bq_jobgroup(request):
+    bqjobs = [BQJobFactory().make_bqjob() for i in range(0, 2)]
+    return BQJobGroupFactory().make_bq_jobgroup(jobs=bqjobs)
+
 
 class TestBQJob(object):
-    pass
+    def setup_method(self, method):
+        pass
+
+    def teardown_method(self, method):
+        pass
+
+    def test_run_async(self, bqjob):
+        bqjob.run_async()
+        assert bqjob.job_reference is not None
+
+    @pytest.mark.parametrize(('schema', 'rows', 'expected'), _fixtures_query_results)
+    def test_run_sync(self, bqjob, schema, rows, expected):
+        bqjob.bq_client.setup_schema_and_rows(schema, rows)
+        assert bqjob.run_sync() == expected
+
+    @pytest.mark.parametrize(('schema', 'rows', 'expected'), _fixtures_query_results)
+    def test_get_result(self, bqjob, schema, rows, expected):
+        bqjob.bq_client.setup_schema_and_rows(schema, rows)
+        assert bqjob.get_result() == expected
+
+
+class TestBQJobGroup(object):
+    """test for BQJobGroup class"""
+
+    def setup_method(self, method):
+        pass
+
+    def teardown_method(self, method):
+        pass
+
+    def test_get_jobs(self, bq_jobgroup):
+        assert len(bq_jobgroup.get_jobs()) >= 0
+
+    def test_add(self, bq_jobgroup, bqjob):
+        orig_len = len(bq_jobgroup.get_jobs())
+        bq_jobgroup.add(bqjob)
+        assert len(bq_jobgroup.get_jobs()) == orig_len + 1
+
+    def test_run_async(self, bq_jobgroup):
+        bq_jobgroup.run_async()
+        for bqjob in bq_jobgroup.get_jobs():
+            assert bqjob.job_reference is not None
+
+    @pytest.mark.parametrize(('schema', 'rows', 'results'), _fixtures_query_results)
+    def test_get_results(self, bq_jobgroup, schema, rows, results):
+        for bqjob in bq_jobgroup.get_jobs():
+            bqjob.bq_client.setup_schema_and_rows(schema, rows)
+        expected = [results for bqjob in range(0, len(bq_jobgroup.get_jobs()))]
+        assert bq_jobgroup.get_results() == expected
+
+    @pytest.mark.parametrize(('schema', 'rows', 'results'), _fixtures_query_results)
+    def test_run_sync(self, bq_jobgroup, schema, rows, results):
+        for bqjob in bq_jobgroup.get_jobs():
+            bqjob.bq_client.setup_schema_and_rows(schema, rows)
+        expected = [results for bqjob in range(0, len(bq_jobgroup.get_jobs()))]
+        assert bq_jobgroup.run_sync() == expected
+
 
 class TestBQHelper(object):
 
     def setup_method(self, method):
-        self.testbed = testbed.Testbed()
-        self.testbed.activate()
-        self.testbed.init_memcache_stub()
         pass
 
     def teardown_method(self, method):
-        self.testbed.deactivate()
+        pass
 
-    @pytest.mark.parametrize(('field_type', 'value', 'expected'), _fixtures_convert_type)
+    @pytest.mark.parametrize(('runtime', 'expected'), _fixtures_is_gae_run_time)
+    def test_is_gae_runtime(self, runtime, expected):
+        if runtime:
+            os.environ['SERVER_SOFTWARE'] = runtime
+        assert BQHelper.is_gae_runtime() == expected
+
+    @pytest.mark.parametrize(('field_type', 'value', 'expected'),
+            _fixtures_convert_type)
     def test_convert_type(self, field_type, value, expected):
         with patch('gae_bq.is_str_or_unicode', return_value=True):
             if isclass(expected) and issubclass(expected, Exception):
@@ -71,10 +181,36 @@ class TestBQHelper(object):
     def test_retrieve_discovery_document(self):
         class _DiscoveryHTTPResponse(object):
             def read(self):
-                return '{}'
+                return Mock()
 
-        with patch('urllib2.urlopen', return_value=_DiscoveryHTTPResponse()):
-            # from http request
-            assert type(BQHelper.retrieve_discovery_document()) == str
-            # from memcache
-            assert type(BQHelper.retrieve_discovery_document()) == str
+        class _DiscoveryDocumentStorage(object):
+            def __init__(self):
+                self._storage = {}
+            def get(self, key):
+                self._storage.get(key)
+            def set(self, key, value, *args, **kwargs):
+                self._storage[key] = value
+
+        with nested(
+                patch('urllib2.urlopen', return_value=_DiscoveryHTTPResponse()),
+                patch('gae_bq.BQHelper.is_gae_runtime', return_value=False)
+                ):
+            storage = _DiscoveryDocumentStorage()
+            # retrieve from HTTP request without storage
+            assert BQHelper.retrieve_discovery_document() is not None
+            # retrieve from HTTP request with storage
+            assert BQHelper.retrieve_discovery_document(storage) is not None
+            # retrieve from storage
+            assert BQHelper.retrieve_discovery_document(storage) is not None
+
+    @pytest.mark.parametrize(('project_id', 'dataset_id', 'table_id', 'expected'),
+            _fixtures_build_fully_qualified_table_name)
+    def test_build_fully_qualified_table_name(self, project_id, 
+            dataset_id, table_id, expected):
+        assert BQHelper.build_fully_qualified_table_name(
+                project_id, dataset_id, table_id) == expected
+
+
+class TestUtilityFunc(object):
+    # TODO
+    pass
