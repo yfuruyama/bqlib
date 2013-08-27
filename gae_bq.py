@@ -19,8 +19,6 @@ _API = 'bigquery'
 _API_VERSION = 'v2'
 _DISCOVERY_URI = ('https://www.googleapis.com/discovery/v1/apis/'
                   '{api}/{apiVersion}/rest')
-_MAX_CONCURRENT_REQUESTS = 5
-
 
 class BQError(Exception):
     def __init__(self, message, error):
@@ -28,55 +26,20 @@ class BQError(Exception):
         self.error = error
 
 
-class BQJobTokenBucket(ndb.Model):
-    u"""BigQuery request controller using Token-Bucket algorithm
-    
-    This model keeps from over requesting to BigQuery concurrently.
-    You can configure the max concurrent requests to change 
-    _MAX_CONCURRENT_REQUESTS global variable.
-    """
-    token_size = ndb.IntegerProperty(indexed=False)
-
-    @classmethod
-    @ndb.transactional
-    def get_bucket(cls):
-        default_id = 'default_buckt'
-        bucket = ndb.Key(cls, default_id).get()
-        if bucket is None:
-            logging.info(_MAX_CONCURRENT_REQUESTS)
-            bucket = cls(
-                    id=default_id,
-                    token_size=_MAX_CONCURRENT_REQUESTS
-                    )
-            bucket.put()
-        return bucket
-
-    @classmethod
-    @ndb.transactional
-    def push_token(cls):
-        bucket = cls.get_bucket()
-        bucket.token_size += 1
-        bucket.put()
-
-    @classmethod
-    @ndb.transactional
-    def pull_token(cls):
-        bucket = cls.get_bucket()
-        bucket.token_size -= 1
-        bucket.put()
-
-
 class BQJob(object):
     """BigQuery Job model
 
     You can use this model to run BigQuery job.
     """
-    def __init__(self, **kwargs):
+    def __init__(self, discovery_document_storage=None, 
+                 verbose=True, **kwargs):
         super(BQJob, self).__init__()
+
+        self.verbose = verbose
 
         for key, value in kwargs.items():
             setattr(self, key, value)
-        for required_flag in ('http', 'project_id', 'query'):
+        for required_flag in ('http', 'project_id'):
             if not kwargs.has_key(required_flag):
                 raise ValueError('Missing required flag: %s' % (required_flag,))
         default_flags = {
