@@ -60,7 +60,7 @@ How to test
 ----------
 ```sh
 $ wget http://svn.zope.org/*checkout*/zc.buildout/trunk/bootstrap/bootstrap.py
-$ python bootstrap.py
+$ python bootstrap.py -d
 $ bin/buildout
 $ bin/py.test -v tests/bqlib_test.py
 ```
