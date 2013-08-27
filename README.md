@@ -56,6 +56,15 @@ results = job_group.get_results()
 print results # [[{'foo': 10}, {'foo': 20}], [{'bar': 'test'}]]
 ```
 
+How to test
+----------
+```sh
+$ wget http://svn.zope.org/*checkout*/zc.buildout/trunk/bootstrap/bootstrap.py
+$ python bootstrap.py
+$ bin/buildout
+$ bin/py.test -v tests/bqlib_test.py
+```
+
 Note
 -----
 - Concurrent Requests to BigQUery
