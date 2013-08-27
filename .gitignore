@@ -19,6 +19,4 @@ lib
 sample/
 
 # for tests
-bootstrap.py
-buildout.cfg
 patch.sh
