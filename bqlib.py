@@ -2,25 +2,22 @@
 # Copyright 2013, Yuuki Furuyama
 # Released under the MIT License.
 
-"""gae-bq - BigQuery library with Google App Engine"""
+""" bqlib - BigQuery python library """
 
 import logging
 import urllib2
 import time
 import sys
+import os
+import re
 
-from google.appengine.ext import ndb
-from google.appengine.api import memcache
-
-from bigquery_client import BigqueryError, BigqueryNotFoundError, BigqueryClient, ConfigurePythonLogger
+from bigquery_client import BigqueryError, BigqueryNotFoundError, BigqueryClient
 
 
 _API = 'bigquery'
 _API_VERSION = 'v2'
 _DISCOVERY_URI = ('https://www.googleapis.com/discovery/v1/apis/'
                   '{api}/{apiVersion}/rest')
-_MAX_CONCURRENT_REQUESTS = 5
-
 
 class BQError(Exception):
     def __init__(self, message, error):
@@ -28,90 +25,63 @@ class BQError(Exception):
         self.error = error
 
 
-class BQJobTokenBucket(ndb.Model):
-    u"""BigQuery request controller using Token-Bucket algorithm
-    
-    This model keeps from over requesting to BigQuery concurrently.
-    You can configure the max concurrent requests to change 
-    _MAX_CONCURRENT_REQUESTS global variable.
-    """
-    token_size = ndb.IntegerProperty(indexed=False)
-
-    @classmethod
-    @ndb.transactional
-    def get_bucket(cls):
-        default_id = 'default_buckt'
-        bucket = ndb.Key(cls, default_id).get()
-        if bucket is None:
-            logging.info(_MAX_CONCURRENT_REQUESTS)
-            bucket = cls(
-                    id=default_id,
-                    token_size=_MAX_CONCURRENT_REQUESTS
-                    )
-            bucket.put()
-        return bucket
-
-    @classmethod
-    @ndb.transactional
-    def push_token(cls):
-        bucket = cls.get_bucket()
-        bucket.token_size += 1
-        bucket.put()
-
-    @classmethod
-    @ndb.transactional
-    def pull_token(cls):
-        bucket = cls.get_bucket()
-        bucket.token_size -= 1
-        bucket.put()
-
-
 class BQJob(object):
     """BigQuery Job model
 
     You can use this model to run BigQuery job.
     """
-    def __init__(self, **kwargs):
+    def __init__(self, discovery_document_storage=None, 
+                 verbose=True, **kwargs):
         super(BQJob, self).__init__()
+
+        self.verbose = verbose
 
         for key, value in kwargs.items():
             setattr(self, key, value)
-        for required_flag in ('http', 'project_id', 'query'):
+        for required_flag in ('http', 'project_id'):
             if not kwargs.has_key(required_flag):
                 raise ValueError('Missing required flag: %s' % (required_flag,))
         default_flags = {
-            'bq_client': None,
             'job_reference': None,
         }
         for key, value in default_flags.iteritems():
             if not hasattr(self, key):
                 setattr(self, key, value)
 
+        if not hasattr(self, 'bq_client'):
+            if discovery_document_storage is None and BQHelper.is_gae_runtime():
+                from google.appengine.api import memcache
+                discovery_document_storage = memcache
+
+            discovery_document = BQHelper.retrieve_discovery_document(
+                    discovery_document_storage)
+            bq_client = BigqueryClient(
+                    api=_API,
+                    api_version=_API_VERSION,
+                    project_id=self.project_id,
+                    discovery_document=discovery_document,
+                    wait_printer_factory=BigqueryClient.QuietWaitPrinter
+                    )
+
+            # BigqueryClient requires 'credentials' to build 
+            # apiclient instance. But using 'authorized http' 
+            # is more versatile than using 'credentials'.
+            bq_client._apiclient = BQHelper.build_apiclient(
+                discovery_document,
+                self.http)
+            self.bq_client = bq_client
+
     def run_sync(self, timeout=sys.maxint):
         self.run_async()
         try:
-            return self._get_result(timeout=timeout)
+            return self.get_result(timeout=timeout)
         except StopIteration as e:
             raise BQError(message='timeout', error=[])
 
     def run_async(self, **kwargs):
-        discovery_document = BQHelper.retrieve_discovery_document()
-        bq_client = BigqueryClient(
-                api=_API,
-                api_version=_API_VERSION,
-                project_id=self.project_id,
-                discovery_document=discovery_document,
-                )
-
-        # BigqueryClient requires 'credentials' to build apiclient instance.
-        # But using 'authorized http' is more versatile than using 'credentials'.
-        bq_client._apiclient = BQHelper.build_apiclient(
-            discovery_document,
-            self.http)
-
-        BQJobTokenBucket.pull_token()
+        # BQJobTokenBucket.pull_token()
         try:
-            job = run_func_with_backoff(bq_client.Query, query=self.query, sync=False)
+            job = run_func_with_backoff(self.bq_client.Query, query=self.query, sync=False)
         except BigqueryError as err:
             message = None
             error = None
@@ -120,21 +90,20 @@ class BQJob(object):
             if hasattr(err, 'error'):
                 error = err.error
             raise BQError(message=message, error=error)
-        self.job_reference = BigqueryClient.ConstructObjectReference(job)
-        self.bq_client = bq_client
+        self.job_reference = self.bq_client.ConstructObjectReference(job)
 
-    def get_result(self):
+    def get_result(self, timeout=sys.maxint):
         """ get response from BigQuery
 
         same signature with async urlfetch : rpc.get_result()
         """
-        return self._get_result()
-
-    def _get_result(self, timeout=sys.maxint):
         bq_client = self.bq_client
         job_reference = self.job_reference
-        job = bq_client.WaitJob(job_reference, wait=timeout)
-        BQJobTokenBucket.push_token()
+        job = bq_client.WaitJob(job_reference,
+                wait=timeout,
+                wait_printer_factory=bq_client.wait_printer_factory)
+        if self.verbose:
+            self._print_verbose(job)
         schema, rows = bq_client.ReadSchemaAndRows(
                 job['configuration']['query']['destinationTable'],
                 max_rows=(2**31-1) # max_rows must be under uint32
@@ -147,6 +116,24 @@ class BQJob(object):
                 result[field['name']] = converted_value
             results.append(result)
         return results
+
+    def _print_verbose(self, job_dict):
+        log_format = """
+        ############### Bigquery Query Results ###############
+         projectId           : {project_id}
+         jobId               : {job_id}
+         query               : {query}
+         totalBytesProcessed : {total_bytes_processed} Bytes
+         cacheHit            : {cache_hit}
+        ######################################################
+        """
+        logging.info(log_format.format(
+            project_id=job_dict['jobReference']['projectId'],
+            job_id=job_dict['jobReference']['projectId'],
+            query=job_dict['configuration']['query']['query'],
+            total_bytes_processed=job_dict['statistics']['query']['totalBytesProcessed'],
+            cache_hit=job_dict['statistics']['query'].get('cacheHit'))
+        )
 
 
 class BQJobGroup(object):
@@ -162,18 +149,21 @@ class BQJobGroup(object):
     def add(self, bqjob):
         self.jobs.append(bqjob)
 
-    def remove(bqjob):
+    def remove(self, bqjob):
+        # TODO
         pass
+
+    def get_jobs(self):
+        return self.jobs
 
     def run_sync(self, timeout=sys.maxint):
         # start job
-        for job in self.jobs:
-            job.run_async()
+        self.run_async()
 
         # get job result
         results = []
         for job in self.jobs:
-            results.append(job._get_result(timeout=timeout))
+            results.append(job.get_result(timeout=timeout))
         return results
 
     def run_async(self):
@@ -193,17 +183,30 @@ class BQHelper(object):
         raise NotImplementedError('cannot instantiate this static class')
 
     @staticmethod
-    def retrieve_discovery_document():
+    def is_gae_runtime():
+        server_software = os.environ.get('SERVER_SOFTWARE')
+        if server_software is not None:
+            num = r'\d+'
+            gae = r'Google App Engine/%s\.%s\.%s' % (num, num, num)
+            gae_dev = r'Development/%s\.%s' % (num, num)
+            return bool(re.match(gae, server_software) or 
+                        re.match(gae_dev, server_software))
+        else:
+            return False
+
+    @staticmethod
+    def retrieve_discovery_document(storage=None):
         u""" Retrieve discovery document for BigQuery
         
         At first, discovery document is to be fetched from memcache.
         If discovery document doesn't exist in memcache,
         publish HTTP request to get a document discovery and set it to memcache
         """
-        document_key = 'discovery_document'
-        discovery_document = memcache.get(document_key)
-        if discovery_document is not None:
-            return discovery_document
+        if storage is not None and hasattr(storage, 'get'):
+            document_key = 'discovery_document'
+            discovery_document = storage.get(document_key)
+            if discovery_document is not None:
+                return discovery_document
 
         params = {'api': _API, 'apiVersion': _API_VERSION}
         request_url = _DISCOVERY_URI.format(**params)
@@ -214,7 +217,9 @@ class BQHelper(object):
             body = response.read()
         except urllib2.HTTPError as err:
             raise err
-        memcache.set(document_key, body, time=86400) # 86400 = 1 day
+
+        if storage is not None and hasattr(storage, 'set'):
+            storage.set(document_key, body, time=86400) # 86400 = 1 day
 
         return body
 
@@ -224,11 +229,10 @@ class BQHelper(object):
         from bigquery_client import BigqueryModel, BigqueryHttp
 
         bigquery_model = BigqueryModel()
-        bigquery_http = BigqueryHttp.Factory(bigquery_model)
         return discovery.build_from_document(
             discovery_document, http=http,
             model=bigquery_model,
-            requestBuilder=bigquery_http)
+            requestBuilder=BigqueryHttp.Factory(bigquery_model))
 
 
     @staticmethod
