@@ -2,7 +2,7 @@
 # Copyright 2013, Yuuki Furuyama
 # Released under the MIT License.
 
-"""gae-bq tests"""
+"""bq tests"""
 
 import os
 import sys
@@ -11,7 +11,7 @@ from contextlib import nested
 
 import pytest
 from mock import patch, Mock
-from gae_bq import BQJob, BQJobGroup, BQHelper
+from bq import BQJob, BQJobGroup, BQHelper
 
 ### fixtures
 _fixtures_convert_type = [

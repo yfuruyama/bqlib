@@ -2,7 +2,7 @@
 # Copyright 2013, Yuuki Furuyama
 # Released under the MIT License.
 
-"""gae-bq - BigQuery library with Google App Engine"""
+""" bq - BigQuery python library """
 
 import logging
 import urllib2
