@@ -1,4 +1,4 @@
-bqlib - BigQuery python library
+bqlib - BigQuery python library [![Build Status](https://travis-ci.org/addsict/bqlib.png)](https://travis-ci.org/addsict/bqlib)
 ------------------------------------------------
 A BigQuery python library.  
 This library is a wrapper for bigquery_client.py provided by Google.
@@ -60,7 +60,7 @@ How to test
 ----------
 ```sh
 $ wget http://svn.zope.org/*checkout*/zc.buildout/trunk/bootstrap/bootstrap.py
-$ python bootstrap.py -d
+$ python bootstrap.py -v 1.7.1
 $ bin/buildout
 $ bin/py.test -v tests/bqlib_test.py
 ```
