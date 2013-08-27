@@ -17,6 +17,3 @@ lib
 
 # sample application
 sample/
-
-# for tests
-patch.sh
