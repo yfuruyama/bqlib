@@ -43,13 +43,28 @@ _fixtures_query_results = [
      ),
 ]
 
+# _fixtures_bqtable_init = [
+    # ({
+        # 'project_id': 'foo',
+        # 'dataset_id': 'bar',
+        # 'table_id': 'baz'
+        # },{u'fields': [{u'type': u'STRING', u'name': u'date'}, {u'type': u'FLOAT', u'name': u'charge'}]}  ), 
+     # {
+         # 'table_dict': {
+             # 'projectId': 'Foo',
+             # 'dataset_id'
+     # })
+# ]
+
 
 class BigqueryClientMock(object):
     """Mock for BigqueryClient class"""
     def __init__(self):
         self.wait_printer_factory = Mock()
     def setup_schema_and_rows(self, schema, rows):
-        self._schema = schema
+        self._schema = {
+            'fields': schema
+        }
         self._rows = rows
     def Query(self, query, **kwargs):
         job = Mock()
@@ -73,13 +88,16 @@ class BigqueryClientMock(object):
         schema = self._schema
         rows = self._rows
         return (schema, rows)
+    def GetTableSchema(self, table_dict):
+        return self._schema
+    def ReadTableRows(self, table_dict, max_rows):
+        return self._rows
 
 
 class BQJobFactory():
-    def make_bqjob(self, http=Mock(), project_id=Mock(),
-            bq_client=BigqueryClientMock(), query=Mock()):
-        return BQJob(http=http, project_id=project_id,
-                bq_client=bq_client, query=query, verbose=False)
+    def make_bqjob(self):
+        return BQJob(Mock(), Mock(), bq_client=BigqueryClientMock(), 
+                query=Mock(), verbose=False)
 
 
 class BQJobGroupFactory():
@@ -154,6 +172,12 @@ class TestBQJobGroup(object):
             bqjob.bq_client.setup_schema_and_rows(schema, rows)
         expected = [results for bqjob in range(0, len(bq_jobgroup.get_jobs()))]
         assert bq_jobgroup.run_sync() == expected
+
+
+# class TestBQTable(object):
+    # """test for BQTable class"""
+    # def test_get_schema(self, bqtable):
+        # pass
 
 
 class TestBQHelper(object):

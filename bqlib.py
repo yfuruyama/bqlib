@@ -26,30 +26,11 @@ class BQError(Exception):
         self.error = error
 
 
-class BQJob(object):
-    """BigQuery Job model
-
-    You can use this model to run BigQuery job.
-    """
-    def __init__(self, discovery_document_storage=None, 
-                 verbose=True, **kwargs):
-        super(BQJob, self).__init__()
-
-        self.verbose = verbose
-
-        for key, value in kwargs.items():
-            setattr(self, key, value)
-        for required_flag in ('http', 'project_id'):
-            if not kwargs.has_key(required_flag):
-                raise ValueError('Missing required flag: %s' % (required_flag,))
-        default_flags = {
-            'job_reference': None,
-        }
-        for key, value in default_flags.iteritems():
-            if not hasattr(self, key):
-                setattr(self, key, value)
-
-        if not hasattr(self, 'bq_client'):
+class BaseBQ(object):
+    def __init__(self, http, project_id=None,
+                 discovery_document_storage=None, bq_client=None):
+        self.http = http
+        if bq_client is None:
             if discovery_document_storage is None and BQHelper.is_gae_runtime():
                 from google.appengine.api import memcache
                 discovery_document_storage = memcache
@@ -59,7 +40,7 @@ class BQJob(object):
             bq_client = BigqueryClient(
                     api=_API,
                     api_version=_API_VERSION,
-                    project_id=self.project_id,
+                    project_id=project_id,
                     discovery_document=discovery_document,
                     wait_printer_factory=BigqueryClient.QuietWaitPrinter
                     )
@@ -69,8 +50,28 @@ class BQJob(object):
             # is more versatile than using 'credentials'.
             bq_client._apiclient = BQHelper.build_apiclient(
                 discovery_document,
-                self.http)
-            self.bq_client = bq_client
+                http)
+        self.bq_client = bq_client
+
+
+class BQJob(BaseBQ):
+    """BigQuery Job model
+
+    You can use this model to run BigQuery job.
+    project_id, job_referenceはこのモデルだけ持つべき
+    """
+    def __init__(self, http, project_id, discovery_document_storage=None, 
+                 bq_client=None, query=None, verbose=True, **kwargs):
+        super(BQJob, self).__init__(
+                http,
+                project_id=project_id,
+                discovery_document_storage=discovery_document_storage,
+                bq_client=bq_client
+                )
+
+        self.verbose = verbose
+        self.query = query
+        self.job_reference = None
 
     def run_sync(self, timeout=sys.maxint):
         self.run_async()
@@ -105,19 +106,12 @@ class BQJob(object):
                 wait_printer_factory=bq_client.wait_printer_factory)
         if self.verbose:
             self._print_verbose(job)
-        schema, rows = bq_client.ReadSchemaAndRows(
-                job['configuration']['query']['destinationTable'],
-                max_rows=(2**31-1) # max_rows must be under uint32
+        bqtable = BQTable(self.http,
+                bq_client=bq_client,
+                table_dict=job['configuration']['query']['destinationTable']
                 )
-        results = []
-        for row in rows:
-            result = {}
-            for (field, value) in zip(schema, row):
-                converted_value = BQHelper.convert_type(field['type'], value)
-                result[field['name']] = converted_value
-            results.append(result)
-        return results
-
+        return bqtable.read_rows()
+    
     def _print_verbose(self, job_dict):
         log_format = """
         ############### Bigquery Query Results ###############
@@ -175,6 +169,60 @@ class BQJobGroup(object):
         results = []
         for job in self.jobs:
             results.append(job.get_result())
+        return results
+
+
+class BQTable(BaseBQ):
+    def __init__(self, http, project_id=None, dataset_id=None, table_id=None,
+                 table_dict=None, discovery_document_storage=None, bq_client=None,
+                 **kwargs):
+        super(BQTable, self).__init__(
+                http,
+                discovery_document_storage=discovery_document_storage,
+                bq_client=bq_client
+                )
+        if table_dict is None:
+            table_dict = {
+                'projectId': project_id,
+                'datasetId': dataset_id,
+                'tableId': table_id
+            }
+        self.table_dict = table_dict
+
+    def get_info(self):
+        fqtn = BQHelper.build_fully_qualified_table_name(
+                table_dict=self.table_dict, with_bracket=False)
+        table_reference = self.bq_client.GetTableReference(fqtn)
+        return self.bq_client.GetObjectInfo(table_reference)
+
+    def get_schema(self):
+        return self.bq_client.GetTableSchema(self.table_dict).get('fields', [])
+
+    def read_rows(self, start_index=None, max_rows=(2**31-1)):
+        """
+        
+        NOTE
+        max_rows must be under uint32
+        """
+        schema = self.get_schema()
+        table_dict = self.table_dict.copy()
+        # HACK
+        # extends table_dict with startIndex
+        # because BigqueryClient.ReadTableRows doesn't accept 'startIndex' arg
+        if start_index is not None:
+            table_dict.update({'startIndex': str(start_index)})
+            max_rows = int(self.get_info().get('numRows')) - int(start_index)
+        rows = self.bq_client.ReadTableRows(
+                table_dict,
+                max_rows=max_rows
+                )
+        results = []
+        for row in rows:
+            result = {}
+            for (field, value) in zip(schema, row):
+                converted_value = BQHelper.convert_type(field['type'], value)
+                result[field['name']] = converted_value
+            results.append(result)
         return results
 
 
@@ -277,10 +325,18 @@ class BQHelper(object):
             return datetime.datetime.utcfromtimestamp(float(value))
 
     @staticmethod
-    def build_fully_qualified_table_name(project_id, dataset_id, table_id):
+    def build_fully_qualified_table_name(
+            project_id=None, dataset_id=None, table_id=None, table_dict=None,
+            with_bracket=True):
         """Build fully qualified table name from project-id, dataset-id, and table-id"""
-        return "[%s:%s.%s]" % (project_id, dataset_id, table_id)
-
+        if table_dict is not None:
+            project_id = table_dict.get('projectId')
+            dataset_id = table_dict.get('datasetId')
+            table_id = table_dict.get('tableId')
+        if with_bracket:
+            return "[%s:%s.%s]" % (project_id, dataset_id, table_id)
+        else:
+            return "%s:%s.%s" % (project_id, dataset_id, table_id)
 
 
 """utility functions"""
