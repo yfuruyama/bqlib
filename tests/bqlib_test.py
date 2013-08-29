@@ -11,7 +11,7 @@ from contextlib import nested
 
 import pytest
 from mock import patch, Mock
-from bqlib import BQJob, BQJobGroup, BQHelper
+from bqlib import BQJob, BQJobGroup, BQTable, BQHelper
 
 ### fixtures
 _fixtures_convert_type = [
@@ -42,19 +42,6 @@ _fixtures_query_results = [
      [{u'date': u'2012-06-21', u'charge': 1.0}, {u'date': u'2012-06-23', u'charge': 2.0}, {u'date': u'2012-09-01', u'charge': 1000.0},],
      ),
 ]
-
-# _fixtures_bqtable_init = [
-    # ({
-        # 'project_id': 'foo',
-        # 'dataset_id': 'bar',
-        # 'table_id': 'baz'
-        # },{u'fields': [{u'type': u'STRING', u'name': u'date'}, {u'type': u'FLOAT', u'name': u'charge'}]}  ), 
-     # {
-         # 'table_dict': {
-             # 'projectId': 'Foo',
-             # 'dataset_id'
-     # })
-# ]
 
 
 class BigqueryClientMock(object):
@@ -105,6 +92,12 @@ class BQJobGroupFactory():
         return BQJobGroup(jobs=jobs)
 
 
+class BQTableFactory():
+    def make_bqtable(self):
+        http = Mock()
+        return BQTable(http, bq_client=BigqueryClientMock())
+
+
 def pytest_funcarg__bqjob(request):
     return BQJobFactory().make_bqjob()
 
@@ -112,6 +105,10 @@ def pytest_funcarg__bqjob(request):
 def pytest_funcarg__bq_jobgroup(request):
     bqjobs = [BQJobFactory().make_bqjob() for i in range(0, 2)]
     return BQJobGroupFactory().make_bq_jobgroup(jobs=bqjobs)
+
+
+def pytest_funcarg__bqtable(request):
+    return BQTableFactory().make_bqtable()
 
 
 class TestBQJob(object):
@@ -174,10 +171,12 @@ class TestBQJobGroup(object):
         assert bq_jobgroup.run_sync() == expected
 
 
-# class TestBQTable(object):
-    # """test for BQTable class"""
-    # def test_get_schema(self, bqtable):
-        # pass
+class TestBQTable(object):
+    """test for BQTable class"""
+    @pytest.mark.parametrize(('schema', 'rows', 'expected'), _fixtures_query_results)
+    def test_read_rows(self, bqtable, schema, rows, expected):
+        bqtable.bq_client.setup_schema_and_rows(schema, rows)
+        assert bqtable.read_rows() == expected
 
 
 class TestBQHelper(object):
