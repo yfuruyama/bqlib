@@ -84,8 +84,8 @@ class BQJob(BaseBQ):
         self.query = query
         self.job_reference = None
 
-    def run_sync(self, timeout=sys.maxint):
-        self.run_async()
+    def run_sync(self, timeout=sys.maxint, **kwargs):
+        self.run_async(**kwargs)
         try:
             return self.get_result(timeout=timeout)
         except StopIteration as e:
@@ -94,7 +94,8 @@ class BQJob(BaseBQ):
     def run_async(self, **kwargs):
         # BQJobTokenBucket.pull_token()
         try:
-            job = run_func_with_backoff(self.bq_client.Query, query=self.query, sync=False)
+            job = run_func_with_backoff(self.bq_client.Query,
+                    self.query, sync=False, **kwargs)
         except BigqueryError as err:
             message = None
             error = None
@@ -367,11 +368,13 @@ def is_str_or_unicode(obj):
     return isinstance(obj, unicode) or isinstance(obj, str)
 
 
-def run_func_with_backoff(func, retry=3, backoff=1, **kwargs):
+def run_func_with_backoff(func, *args, **kwargs):
     count = 0
+    retry = kwargs.get('retry', 3)
+    backoff = kwargs.get('backoff', 1)
     while count < retry:
         try:
-            return func(**kwargs)
+            return func(*args, **kwargs)
         except BigqueryNotFoundError as err:
             raise err
         except BigqueryError as err:
