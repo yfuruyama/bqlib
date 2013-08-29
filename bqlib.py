@@ -29,6 +29,12 @@ class BQError(Exception):
 class BaseBQ(object):
     def __init__(self, http, project_id=None,
                  discovery_document_storage=None, bq_client=None):
+        """Initialize BaseBQ.
+
+        Base class for BQJob, BQJobGroup, and BQTable.
+        Required keywords:
+            http: oauth2-authorized HTTP object
+        """
         self.http = http
         if bq_client is None:
             if discovery_document_storage is None and BQHelper.is_gae_runtime():
@@ -58,10 +64,15 @@ class BQJob(BaseBQ):
     """BigQuery Job model
 
     You can use this model to run BigQuery job.
-    project_id, job_referenceはこのモデルだけ持つべき
     """
     def __init__(self, http, project_id, discovery_document_storage=None, 
                  bq_client=None, query=None, verbose=True, **kwargs):
+        """Initialize BQJob.
+
+        Required keywords:
+            http: oauth2-authorized HTTP object
+            project_id: target project
+        """
         super(BQJob, self).__init__(
                 http,
                 project_id=project_id,
@@ -139,6 +150,11 @@ class BQJobGroup(object):
     'run_sync' and 'ryn_async' method are executed concurrently.
     """
     def __init__(self, jobs=[]):
+        """Initialize BQJobGroup.
+
+        Required keywords:
+            None
+        """
         self.jobs = jobs
 
     def add(self, bqjob):
@@ -176,6 +192,11 @@ class BQTable(BaseBQ):
     def __init__(self, http, project_id=None, dataset_id=None, table_id=None,
                  table_dict=None, discovery_document_storage=None, bq_client=None,
                  **kwargs):
+        """Initialize BQTable.
+
+        Required keywords:
+            http: oauth2-authorized HTTP object
+        """
         super(BQTable, self).__init__(
                 http,
                 discovery_document_storage=discovery_document_storage,
@@ -190,6 +211,7 @@ class BQTable(BaseBQ):
         self.table_dict = table_dict
 
     def get_info(self):
+        """get table information"""
         fqtn = BQHelper.build_fully_qualified_table_name(
                 table_dict=self.table_dict, with_bracket=False)
         table_reference = self.bq_client.GetTableReference(fqtn)
@@ -199,7 +221,7 @@ class BQTable(BaseBQ):
         return self.bq_client.GetTableSchema(self.table_dict).get('fields', [])
 
     def read_rows(self, start_index=None, max_rows=(2**31-1)):
-        """
+        """read rows from table
         
         NOTE
         max_rows must be under uint32
@@ -233,6 +255,7 @@ class BQHelper(object):
 
     @staticmethod
     def is_gae_runtime():
+        """Whether this runtime is Google App Engine"""
         server_software = os.environ.get('SERVER_SOFTWARE')
         if server_software is not None:
             num = r'\d+'
