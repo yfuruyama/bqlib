@@ -125,8 +125,8 @@ class BQJob(BaseBQ):
         return bqtable.read_rows()
     
     def _print_verbose(self, job_dict):
-        log_format = """
-        ############### Bigquery Query Results ###############
+        log_format = u"""
+        u############### Bigquery Query Results ###############
          projectId           : {project_id}
          jobId               : {job_id}
          query               : {query}
@@ -139,7 +139,7 @@ class BQJob(BaseBQ):
             job_id=job_dict['jobReference']['projectId'],
             query=job_dict['configuration']['query']['query'],
             total_bytes_processed=job_dict['statistics']['query']['totalBytesProcessed'],
-            cache_hit=job_dict['statistics']['query'].get('cacheHit'))
+            cache_hit=job_dict['statistics']['query'].get('cacheHit', 'False'))
         )
 
 
