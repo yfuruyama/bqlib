@@ -12,7 +12,9 @@ import datetime
 import os
 import re
 
-from bigquery_client import BigqueryError, BigqueryNotFoundError, BigqueryClient
+from bigquery_client import (BigqueryError,
+                             BigqueryNotFoundError,
+                             BigqueryClient)
 
 
 _API = 'bigquery'
@@ -20,8 +22,10 @@ _API_VERSION = 'v2'
 _DISCOVERY_URI = ('https://www.googleapis.com/discovery/v1/apis/'
                   '{api}/{apiVersion}/rest')
 
+
 class BQError(Exception):
     def __init__(self, message, error):
+        super(BQError, self).__init__()
         self.message = message
         self.error = error
 
@@ -37,22 +41,20 @@ class BaseBQ(object):
         """
         self.http = http
         if bq_client is None:
-            if discovery_document_storage is None and BQHelper.is_gae_runtime():
+            if (discovery_document_storage is None and
+                    BQHelper.is_gae_runtime()):
                 from google.appengine.api import memcache
                 discovery_document_storage = memcache
 
             discovery_document = BQHelper.retrieve_discovery_document(
-                    discovery_document_storage)
+                discovery_document_storage)
             bq_client = BigqueryClient(
-                    api=_API,
-                    api_version=_API_VERSION,
-                    project_id=project_id,
-                    discovery_document=discovery_document,
-                    wait_printer_factory=BigqueryClient.QuietWaitPrinter
-                    )
+                api=_API, api_version=_API_VERSION,
+                project_id=project_id, discovery_document=discovery_document,
+                wait_printer_factory=BigqueryClient.QuietWaitPrinter)
 
-            # BigqueryClient requires 'credentials' to build 
-            # apiclient instance. But using 'authorized http' 
+            # BigqueryClient requires 'credentials' to build
+            # apiclient instance. But using 'authorized http'
             # is more versatile than using 'credentials'.
             bq_client._apiclient = BQHelper.build_apiclient(
                 discovery_document,
@@ -65,7 +67,7 @@ class BQJob(BaseBQ):
 
     You can use this model to run BigQuery job.
     """
-    def __init__(self, http, project_id, discovery_document_storage=None, 
+    def __init__(self, http, project_id, discovery_document_storage=None,
                  bq_client=None, query=None, verbose=True, **kwargs):
         """Initialize BQJob.
 
@@ -74,11 +76,11 @@ class BQJob(BaseBQ):
             project_id: target project
         """
         super(BQJob, self).__init__(
-                http,
-                project_id=project_id,
-                discovery_document_storage=discovery_document_storage,
-                bq_client=bq_client
-                )
+            http,
+            project_id=project_id,
+            discovery_document_storage=discovery_document_storage,
+            bq_client=bq_client
+            )
 
         self.verbose = verbose
         self.query = query
@@ -94,8 +96,9 @@ class BQJob(BaseBQ):
     def run_async(self, **kwargs):
         # BQJobTokenBucket.pull_token()
         try:
-            job = run_func_with_backoff(self.bq_client.Query,
-                    self.query, sync=False, **kwargs)
+            job = run_func_with_backoff(
+                self.bq_client.Query, self.query,
+                sync=False, **kwargs)
         except BigqueryError as err:
             message = None
             error = None
@@ -113,32 +116,34 @@ class BQJob(BaseBQ):
         """
         bq_client = self.bq_client
         job_reference = self.job_reference
-        job = bq_client.WaitJob(job_reference,
-                wait=timeout,
-                wait_printer_factory=bq_client.wait_printer_factory)
+        job = bq_client.WaitJob(
+            job_reference,
+            wait=timeout,
+            wait_printer_factory=bq_client.wait_printer_factory)
         if self.verbose:
             self._print_verbose(job)
-        bqtable = BQTable(self.http,
-                bq_client=bq_client,
-                table_dict=job['configuration']['query']['destinationTable']
-                )
+        bqtable = BQTable(
+            self.http,
+            bq_client=bq_client,
+            table_dict=job['configuration']['query']['destinationTable']
+            )
         return bqtable.read_rows()
-    
+
     def _print_verbose(self, job_dict):
         log_format = u"""
         u############### Bigquery Query Results ###############
          projectId           : {project_id}
          jobId               : {job_id}
          query               : {query}
-         totalBytesProcessed : {total_bytes_processed} Bytes
+         totalBytesProcessed : {total_bytes} Bytes
          cacheHit            : {cache_hit}
         ######################################################
         """
         logging.info(log_format.format(
             project_id=job_dict['jobReference']['projectId'],
-            job_id=job_dict['jobReference']['projectId'],
+            job_id=job_dict['jobReference']['jobId'],
             query=job_dict['configuration']['query']['query'],
-            total_bytes_processed=job_dict['statistics']['query']['totalBytesProcessed'],
+            total_bytes=job_dict['statistics']['query']['totalBytesProcessed'],
             cache_hit=job_dict['statistics']['query'].get('cacheHit', 'False'))
         )
 
@@ -191,30 +196,31 @@ class BQJobGroup(object):
 
 class BQTable(BaseBQ):
     def __init__(self, http, project_id=None, dataset_id=None, table_id=None,
-                 table_dict=None, discovery_document_storage=None, bq_client=None,
-                 **kwargs):
+                 table_dict=None, discovery_document_storage=None,
+                 bq_client=None, **kwargs):
         """Initialize BQTable.
 
         Required keywords:
             http: oauth2-authorized HTTP object
         """
         super(BQTable, self).__init__(
-                http,
-                discovery_document_storage=discovery_document_storage,
-                bq_client=bq_client
-                )
+            http,
+            discovery_document_storage=discovery_document_storage,
+            bq_client=bq_client
+            )
         if table_dict is None:
             table_dict = {
                 'projectId': project_id,
                 'datasetId': dataset_id,
                 'tableId': table_id
-            }
+                }
         self.table_dict = table_dict
 
     def get_info(self):
         """get table information"""
         fqtn = BQHelper.build_fully_qualified_table_name(
-                table_dict=self.table_dict, with_bracket=False)
+            table_dict=self.table_dict,
+            with_bracket=False)
         table_reference = self.bq_client.GetTableReference(fqtn)
         return self.bq_client.GetObjectInfo(table_reference)
 
@@ -223,7 +229,7 @@ class BQTable(BaseBQ):
 
     def read_rows(self, start_index=None, max_rows=(2**31-1)):
         """read rows from table
-        
+
         NOTE
         max_rows must be under uint32
         """
@@ -236,9 +242,9 @@ class BQTable(BaseBQ):
             table_dict.update({'startIndex': str(start_index)})
             max_rows = int(self.get_info().get('numRows')) - int(start_index)
         rows = self.bq_client.ReadTableRows(
-                table_dict,
-                max_rows=max_rows
-                )
+            table_dict,
+            max_rows=max_rows
+            )
         results = []
         for row in rows:
             result = {}
@@ -262,7 +268,7 @@ class BQHelper(object):
             num = r'\d+'
             gae = r'Google App Engine/%s\.%s\.%s' % (num, num, num)
             gae_dev = r'Development/%s\.%s' % (num, num)
-            return bool(re.match(gae, server_software) or 
+            return bool(re.match(gae, server_software) or
                         re.match(gae_dev, server_software))
         else:
             return False
@@ -270,7 +276,7 @@ class BQHelper(object):
     @staticmethod
     def retrieve_discovery_document(storage=None):
         u""" Retrieve discovery document for BigQuery
-        
+
         At first, discovery document is to be fetched from memcache.
         If discovery document doesn't exist in memcache,
         publish HTTP request to get a document discovery and set it to memcache
@@ -292,7 +298,7 @@ class BQHelper(object):
             raise err
 
         if storage is not None and hasattr(storage, 'set'):
-            storage.set(document_key, body, time=86400) # 86400 = 1 day
+            storage.set(document_key, body, time=86400)  # 86400 = 1 day
 
         return body
 
@@ -306,7 +312,6 @@ class BQHelper(object):
             discovery_document, http=http,
             model=bigquery_model,
             requestBuilder=BigqueryHttp.Factory(bigquery_model))
-
 
     @staticmethod
     def convert_type(field_type, value):
@@ -325,12 +330,12 @@ class BQHelper(object):
 
         field_type = field_type.upper()
         supported_field_type = (
-                'STRING',
-                'INTEGER',
-                'FLOAT',
-                'BOOLEAN',
-                'TIMESTAMP',
-                )
+            'STRING',
+            'INTEGER',
+            'FLOAT',
+            'BOOLEAN',
+            'TIMESTAMP',
+            )
         if not field_type in supported_field_type:
             raise ValueError
 
@@ -352,7 +357,7 @@ class BQHelper(object):
     def build_fully_qualified_table_name(
             project_id=None, dataset_id=None, table_id=None, table_dict=None,
             with_bracket=True):
-        """Build fully qualified table name from project-id, dataset-id, and table-id"""
+        """Build fully qualified table name"""
         if table_dict is not None:
             project_id = table_dict.get('projectId')
             dataset_id = table_dict.get('datasetId')
@@ -364,6 +369,8 @@ class BQHelper(object):
 
 
 """utility functions"""
+
+
 def is_str_or_unicode(obj):
     return isinstance(obj, unicode) or isinstance(obj, str)
 
