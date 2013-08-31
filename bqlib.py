@@ -227,7 +227,7 @@ class BQTable(BaseBQ):
     def get_schema(self):
         return self.bq_client.GetTableSchema(self.table_dict).get('fields', [])
 
-    def read_rows(self, start_index=None, max_rows=(2**31-1)):
+    def read_rows(self, start_index=None, max_rows=(2 ** 31 - 1)):
         """read rows from table
 
         NOTE
