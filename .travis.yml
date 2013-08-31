@@ -9,7 +9,6 @@ before_install:
   - bin/buildout
 script:
   - bin/py.test -v tests/bqlib_test.py
-  - bin/py.test --pep8 -v bqlib.py
 notifications:
   emails:
     - addsict@gmail.com
