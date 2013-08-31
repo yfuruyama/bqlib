@@ -90,7 +90,7 @@ class BQJob(BaseBQ):
         self.run_async(**kwargs)
         try:
             return self.get_result(timeout=timeout)
-        except StopIteration as e:
+        except StopIteration:
             raise BQError(message='timeout', error=[])
 
     def run_async(self, **kwargs):
