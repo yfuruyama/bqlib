@@ -1,7 +1,18 @@
 bqlib - BigQuery python library [![Build Status](https://travis-ci.org/addsict/bqlib.png)](https://travis-ci.org/addsict/bqlib)
 ------------------------------------------------
 A BigQuery python library.  
-This library is a wrapper for bigquery_client.py provided by Google.
+This library is a wrapper for bigquery_client.py.  
+
+Requirements
+-------------
+Python 2.6 or later (not support for 3.x)
+
+Setup
+-------
+
+```sh
+$ pip install bqlib
+```
 
 How to use
 ------------
@@ -66,6 +77,7 @@ $ bin/buildout
 $ bin/py.test -v tests/bqlib_test.py
 ```
 
+
 Note
 -----
 - Concurrent Requests to BigQUery
@@ -75,3 +87,8 @@ Note
 License
 -----------
 This library is disributed as MIT license.
+
+History
+--------
+- 2013-10-22 bqlib 0.0.1
+    - First release
