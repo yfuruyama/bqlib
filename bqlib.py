@@ -94,7 +94,6 @@ class BQJob(BaseBQ):
             raise BQError(message='timeout', error=[])
 
     def run_async(self, **kwargs):
-        # BQJobTokenBucket.pull_token()
         try:
             job = run_func_with_backoff(
                 self.bq_client.Query, self.query,
@@ -227,23 +226,13 @@ class BQTable(BaseBQ):
     def get_schema(self):
         return self.bq_client.GetTableSchema(self.table_dict).get('fields', [])
 
-    def read_rows(self, start_index=None, max_rows=(2 ** 31 - 1)):
+    def read_rows(self):
         """read rows from table
-
-        NOTE
-        max_rows must be under uint32
         """
         schema = self.get_schema()
         table_dict = self.table_dict.copy()
-        # HACK
-        # extends table_dict with startIndex
-        # because BigqueryClient.ReadTableRows doesn't accept 'startIndex' arg
-        if start_index is not None:
-            table_dict.update({'startIndex': str(start_index)})
-            max_rows = int(self.get_info().get('numRows')) - int(start_index)
         rows = self.bq_client.ReadTableRows(
-            table_dict,
-            max_rows=max_rows
+            table_dict
             )
         results = []
         for row in rows:

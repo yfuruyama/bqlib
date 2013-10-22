@@ -77,7 +77,7 @@ class BigqueryClientMock(object):
         return (schema, rows)
     def GetTableSchema(self, table_dict):
         return self._schema
-    def ReadTableRows(self, table_dict, max_rows):
+    def ReadTableRows(self, table_dict):
         return self._rows
 
 
