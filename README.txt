@@ -32,9 +32,9 @@ Single Query - BQJob
     query = 'SELECT foo FROM bar'
     http = authorized_http
 
-    bqjob = BQJob(project_id=project_id, 
-                  query=query, 
-                  http=http)
+    bqjob = BQJob(http,
+                  project_id, 
+                  query=query)
 
     # run synchronously
     job_result = bqjob.run_sync()
@@ -55,12 +55,12 @@ Multiple Queries - BQJobGroup
 
     from bqlib import BQJob, BQJobGroup
 
-    bqjob1 = BQJob(project_id=project_id, 
-                   query=query, 
-                   http=http)
-    bqjob2 = BQJob(project_id=project_id, 
-                   query=query, 
-                   http=http)
+    bqjob1 = BQJob(http,
+                   project_id, 
+                   query=query)
+    bqjob2 = BQJob(http,
+                   project_id, 
+                   query=query)
 
     job_group = BQJobGroup([bqjob1, bqjob2])
     # synchronously
