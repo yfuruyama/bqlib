@@ -335,10 +335,13 @@ class BQHelper(object):
         elif field_type == 'FLOAT':
             return float(value)
         elif field_type == 'BOOLEAN':
-            if value == 'True':
-                return True
+            if isinstance(value, bool):
+                return value
             else:
-                return False
+                if value.lower() == 'true':
+                    return True
+                else:
+                    return False
         elif field_type == 'TIMESTAMP':
             return datetime.datetime.utcfromtimestamp(float(value))
 
