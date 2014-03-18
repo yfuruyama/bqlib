@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# Copyright 2013, Yuuki Furuyama
+# Copyright 2014, Yuuki Furuyama
 # Released under the MIT License.
 
 """bqlib tests"""
@@ -11,14 +11,15 @@ from contextlib import nested
 
 import pytest
 from mock import patch, Mock
-from bqlib import BQJob, BQJobGroup, BQTable, BQHelper
+from bqlib import BQJob, BQJobGroup, BQTable, BQHelper, BQError
 
 ### fixtures
 _fixtures_convert_type = [
     ('STRING', 'hello', 'hello'),
     ('INTEGER', '1234', 1234),
     ('FLOAT', '0.123', 0.123),
-    ('BOOLEAN', 'False', False),
+    ('BOOLEAN', 'false', False),
+    ('BOOLEAN', True, True),
     (u'STRING', u'hello', 'hello'),
     ('STRING', None, None),
     ('FOO', 'test', ValueError),
@@ -68,6 +69,8 @@ class BigqueryClientMock(object):
               },
             },
           },
+          "status": {
+          }
         }
         job = job_fixture
         return job
@@ -83,8 +86,10 @@ class BigqueryClientMock(object):
 
 class BQJobFactory():
     def make_bqjob(self):
-        return BQJob(Mock(), Mock(), bq_client=BigqueryClientMock(), 
-                query=Mock(), verbose=False)
+        return BQJob(
+            Mock(), Mock(), bq_client=BigqueryClientMock(),
+            query=Mock(), verbose=False
+            )
 
 
 class BQJobGroupFactory():
@@ -132,6 +137,20 @@ class TestBQJob(object):
     def test_get_result(self, bqjob, schema, rows, expected):
         bqjob.bq_client.setup_schema_and_rows(schema, rows)
         assert bqjob.get_result() == expected
+
+    @pytest.mark.parametrize(('schema', 'rows', 'expected'), _fixtures_query_results)
+    def test_get_result_with_error(self, bqjob, schema, rows, expected):
+        job_with_error = {
+            "status": {
+                "errorResult": {
+                    "message": "error test"
+                }
+            }
+        }
+        with patch.object(bqjob.bq_client, 'WaitJob', return_value=job_with_error):
+            with pytest.raises(BQError):
+                bqjob.bq_client.setup_schema_and_rows(schema, rows)
+                bqjob.get_result()
 
 
 class TestBQJobGroup(object):

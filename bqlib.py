@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# Copyright 2013, Yuuki Furuyama
+# Copyright 2014, Yuuki Furuyama
 # Released under the MIT License.
 
 """ bqlib - BigQuery python library """
@@ -28,6 +28,9 @@ class BQError(Exception):
         super(BQError, self).__init__()
         self.message = message
         self.error = error
+
+    def __str__(self):
+        return self.message
 
 
 class BaseBQ(object):
@@ -119,6 +122,11 @@ class BQJob(BaseBQ):
             job_reference,
             wait=timeout,
             wait_printer_factory=bq_client.wait_printer_factory)
+        if job['status'].get('errorResult') is not None:
+            raise BQError(
+                message=job['status']['errorResult']['message'],
+                error=None
+                )
         if self.verbose:
             self._print_verbose(job)
         bqtable = BQTable(
@@ -130,7 +138,7 @@ class BQJob(BaseBQ):
 
     def _print_verbose(self, job_dict):
         log_format = u"""
-        u############### Bigquery Query Results ###############
+        u############### Bigquery Query Statistics ###############
          projectId           : {project_id}
          jobId               : {job_id}
          query               : {query}
@@ -335,10 +343,13 @@ class BQHelper(object):
         elif field_type == 'FLOAT':
             return float(value)
         elif field_type == 'BOOLEAN':
-            if value == 'True':
-                return True
+            if isinstance(value, bool):
+                return value
             else:
-                return False
+                if value.lower() == 'true':
+                    return True
+                else:
+                    return False
         elif field_type == 'TIMESTAMP':
             return datetime.datetime.utcfromtimestamp(float(value))
 
