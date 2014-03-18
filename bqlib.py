@@ -29,6 +29,9 @@ class BQError(Exception):
         self.message = message
         self.error = error
 
+    def __str__(self):
+        return self.message
+
 
 class BaseBQ(object):
     def __init__(self, http, project_id=None,
@@ -119,6 +122,11 @@ class BQJob(BaseBQ):
             job_reference,
             wait=timeout,
             wait_printer_factory=bq_client.wait_printer_factory)
+        if job['status'].get('errorResult') is not None:
+            raise BQError(
+                message=job['status']['errorResult']['message'],
+                error=None
+                )
         if self.verbose:
             self._print_verbose(job)
         bqtable = BQTable(
