@@ -18,49 +18,51 @@ $ pip install bqlib
 How to use
 ------------
 
-### Single Query - BQJob
-BQJob is a class for starting the BigQuery job and fetching the result.  
-You can use either run\_sync(synchronous) or run\_async(asynchronous) method.
+- Single Query - BQJob
 
-```python
-from bqlib import BQJob
+    BQJob is a class for starting the BigQuery job and fetching the result.  
+    You can use either run\_sync(synchronous) or run\_async(asynchronous) method.
 
-project_id = 'example_project'
-query = 'SELECT foo FROM bar'
-http = authorized_http
+    ```python
+    from bqlib import BQJob
+    
+    project_id = 'example_project'
+    query = 'SELECT foo FROM bar'
+    http = authorized_http
+    
+    bqjob = BQJob(http, project_id, query=query)
+    
+    # run synchronously
+    job_result = bqjob.run_sync()
+    
+    # or run asynchronously
+    bqjob.run_async()
+    # ... do other things ...
+    job_result = bqjob.get_result()
+    
+    print job_result # [{u'foo': 10}, {u'foo': 20}, ...]
+    ```
 
-bqjob = BQJob(http, project_id, query=query)
+- Multiple Queries - BQJobGroup
 
-# run synchronously
-job_result = bqjob.run_sync()
+    BQJobGroup is a class for putting multiple BQJobs into an one group.  
+    Each BQJob in that group are executed concurrently.
 
-# or run asynchronously
-bqjob.run_async()
-# ... do other things ...
-job_result = bqjob.get_result()
-
-print job_result # [{u'foo': 10}, {u'foo': 20}, ...]
-```
-
-### Multiple Queries - BQJobGroup
-BQJobGroup is a class for putting multiple BQJobs into an one group.  
-Each BQJob in that group are executed concurrently.
-
-```python
-from bqlib import BQJob, BQJobGroup
-
-bqjob1 = BQJob(http, project_id, query=query)
-bqjob2 = BQJob(http, project_id, query=query)
-
-job_group = BQJobGroup([bqjob1, bqjob2])
-# synchronously
-results = job_group.run_sync()
-# or asynchronously
-job_group.run_async()
-results = job_group.get_results()
-
-print results # [[{'foo': 10}, {'foo': 20}], [{'bar': 'test'}]]
-```
+    ```python
+    from bqlib import BQJob, BQJobGroup
+    
+    bqjob1 = BQJob(http, project_id, query=query)
+    bqjob2 = BQJob(http, project_id, query=query)
+    
+    job_group = BQJobGroup([bqjob1, bqjob2])
+    # synchronously
+    results = job_group.run_sync()
+    # or asynchronously
+    job_group.run_async()
+    results = job_group.get_results()
+    
+    print results # [[{'foo': 10}, {'foo': 20}], [{'bar': 'test'}]]
+    ```
 
 How to test
 ----------
