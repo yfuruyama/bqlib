@@ -4,8 +4,8 @@ from setuptools import setup
 
 setup(
     name='bqlib',
-    version='0.0.1',
-    description='BigQuery python library',
+    version='0.0.2',
+    description='BigQuery Python Library',
     long_description=open('README.txt').read(),
     author='Yuuki Furuyama',
     author_email='addsict@gmail.com',
