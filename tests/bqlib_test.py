@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# Copyright 2013, Yuuki Furuyama
+# Copyright 2014, Yuuki Furuyama
 # Released under the MIT License.
 
 """bqlib tests"""

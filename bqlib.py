@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# Copyright 2013, Yuuki Furuyama
+# Copyright 2014, Yuuki Furuyama
 # Released under the MIT License.
 
 """ bqlib - BigQuery python library """
@@ -138,7 +138,7 @@ class BQJob(BaseBQ):
 
     def _print_verbose(self, job_dict):
         log_format = u"""
-        u############### Bigquery Query Results ###############
+        u############### Bigquery Query Statistics ###############
          projectId           : {project_id}
          jobId               : {job_id}
          query               : {query}
